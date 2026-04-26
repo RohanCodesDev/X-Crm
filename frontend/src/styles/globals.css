@@ -1161,3 +1161,93 @@ body {
     margin-top: 12px;
   }
 }
+
+.banner-error {
+  margin-bottom: 16px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  padding: 12px 14px;
+  border-radius: 6px;
+}
+
+.banner-success {
+  margin-bottom: 16px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+  padding: 12px 14px;
+  border-radius: 6px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 16px;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 540px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 20px;
+}
+
+.modal-card h3 {
+  margin: 0 0 6px 0;
+  color: #111827;
+}
+
+.modal-card p {
+  margin: 0 0 14px 0;
+  color: #6b7280;
+}
+
+.modal-form {
+  display: grid;
+  gap: 10px;
+}
+
+.modal-input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.crm-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.crm-table th,
+.crm-table td {
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 10px;
+  font-size: 0.92rem;
+}
+
+.crm-table th {
+  color: #4b5563;
+  font-weight: 700;
+}
