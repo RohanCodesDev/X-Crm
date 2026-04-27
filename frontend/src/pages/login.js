@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import { Button3D } from '../components/buttons';
+import ThemeToggle from '../components/toggle';
+import GoogleButton from '../components/google-button';
 
 export default function LoginPage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
@@ -106,6 +108,10 @@ export default function LoginPage() {
         }}
       />
 
+      <div className="auth-toggle-wrap">
+        <ThemeToggle />
+      </div>
+
       <div className="auth-grid">
         <section className="auth-panel auth-brand-panel">
           <Link href="/" className="auth-logo-link">
@@ -124,7 +130,7 @@ export default function LoginPage() {
         </section>
 
         <section className="auth-panel auth-form-panel">
-          <p className="auth-badge">Welcome back</p>
+          <p className="auth-kicker-label">Welcome back</p>
           <h3 className="auth-title">Sign in to your workspace</h3>
           <p className="auth-subtitle">Sign in with email or Google to view and edit forms by access level.</p>
 
@@ -135,9 +141,12 @@ export default function LoginPage() {
             </div>
           ) : null}
 
-          <div className="google-slot">
-            <div id="google-signin-button" />
-          </div>
+          <div id="google-signin-button" style={{ display: 'none' }} />
+
+          <GoogleButton onClick={() => {
+            const gBtn = document.querySelector('#google-signin-button div[role=button]');
+            if (gBtn) gBtn.click();
+          }} />
 
           {googleLoading && !error ? <p className="auth-meta">Loading Google Sign-In...</p> : null}
           {googleReady ? <p className="auth-meta">Successful sign-in redirects you to dashboard automatically.</p> : null}

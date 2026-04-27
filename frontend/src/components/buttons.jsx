@@ -26,14 +26,14 @@ const StyledWrapper = styled.div`
     font-size: 0.95rem;
     font-weight: 600;
     color: #ffffff;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
     cursor: pointer;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: inherit;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
   .creative-button::before {
@@ -55,9 +55,9 @@ const StyledWrapper = styled.div`
 
   .creative-button:hover:not(:disabled) {
     transform: translateY(-2px);
-    border-color: rgba(13, 148, 136, 0.5);
-    background: linear-gradient(135deg, #1e293b 0%, #0d9488 150%);
-    box-shadow: 0 8px 25px rgba(13, 148, 136, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.18);
+    background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .creative-button:hover:not(:disabled)::before {
@@ -66,14 +66,14 @@ const StyledWrapper = styled.div`
 
   .creative-button:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   }
 
   .creative-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background: #1e293b;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: #1a1a1a;
+    border-color: rgba(255, 255, 255, 0.04);
     box-shadow: none;
   }
 

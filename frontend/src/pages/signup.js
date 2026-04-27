@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button3D } from '../components/buttons';
+import ThemeToggle from '../components/toggle';
 
 const getPasswordStrength = (password) => {
   if (!password) return { score: 0, label: '', color: '' };
@@ -108,6 +109,10 @@ export default function SignupPage() {
 
   return (
     <main className="auth-shell">
+      <div className="auth-toggle-wrap">
+        <ThemeToggle />
+      </div>
+
       <div className="auth-grid signup-grid">
         <section className="auth-panel auth-brand-panel">
           <Link href="/" className="auth-logo-link">
@@ -126,7 +131,7 @@ export default function SignupPage() {
         </section>
 
         <section className="auth-panel auth-form-panel">
-          <p className="auth-badge">Create profile</p>
+          <p className="auth-kicker-label">Create profile</p>
           <h3 className="auth-title">Start your workspace</h3>
           <p className="auth-subtitle">Complete your details now. You can wire this screen to API signup next.</p>
 
