@@ -1,6 +1,7 @@
 const express = require("express");
 const healthRouter = require("./routes/health");
 const crmRouter = require("./routes/crm");
+const authRouter = require("./routes/auth");
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.get("/", (_req, res) => {
 	res.status(200).json({ status: "ok", service: "backend" });
 });
 app.use("/health", healthRouter);
+app.use("/auth", authRouter);
 app.use("/crm", crmRouter);
 
 module.exports = app;

@@ -8,11 +8,17 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  googleSub      String?  @unique
+  email          String   @unique
+  passwordHash   String?
+  name           String?
+  company        String?
+  role           String?
+  marketingOptIn Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  permissions FormPermission[]
 }
 
 model FormConnection {
@@ -26,8 +32,29 @@ model FormConnection {
   updatedAt    DateTime     @updatedAt
   respondents  Respondent[]
   syncRuns     SyncRun[]
+  permissions  FormPermission[]
 
   @@index([sheetId])
+}
+
+enum AccessLevel {
+  VIEW
+  EDIT
+  OWNER
+}
+
+model FormPermission {
+  id               String         @id @default(cuid())
+  userId           String
+  formConnectionId String
+  accessLevel      AccessLevel    @default(VIEW)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formConnection   FormConnection @relation(fields: [formConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, formConnectionId])
+  @@index([formConnectionId])
 }
 
 model Respondent {
