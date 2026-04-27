@@ -22,10 +22,14 @@ const getPasswordStrength = (password) => {
 };
 
 export default function SignupPage() {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
+  const [role, setRole] = useState('Founder');
+  const [wantsUpdates, setWantsUpdates] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -39,7 +43,7 @@ export default function SignupPage() {
     setError('');
     setSuccess('');
 
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !company || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
@@ -67,9 +71,33 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // TODO: Implement actual signup API call
-      console.log('Signup attempt:', { email, name, password });
-      setSuccess('Account creation coming soon. Use Sign In for now.');
+      const response = await fetch(`${apiBase}/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          company: company.trim(),
+          role,
+          marketingOptIn: wantsUpdates
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Signup failed');
+      }
+
+      localStorage.removeItem('xcrmDemoMode');
+      localStorage.setItem('xcrmGoogleIdToken', data.token);
+      setSuccess('Account created successfully. Redirecting to dashboard...');
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 700);
     } catch (err) {
       setError(err.message || 'Signup failed');
     } finally {
@@ -78,28 +106,44 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="auth-container">
-      <div className="auth-card">
-        <Link href="/">
-          <h2 className="auth-logo">X-CRM</h2>
-        </Link>
+    <main className="auth-shell">
+      <div className="auth-grid signup-grid">
+        <section className="auth-panel auth-brand-panel">
+          <Link href="/" className="auth-logo-link">
+            <h2 className="auth-logo">X-CRM</h2>
+          </Link>
+          <p className="auth-kicker">Get Setup In Minutes</p>
+          <h1 className="auth-hero-title">Build your team-ready CRM layer on top of forms.</h1>
+          <p className="auth-hero-subtitle">
+            Organize responses, assign follow-ups, and keep ownership clear across your full pipeline.
+          </p>
+          <div className="auth-highlights">
+            <div className="auth-highlight-item">Create and manage multiple form connections</div>
+            <div className="auth-highlight-item">Share VIEW and EDIT roles instantly</div>
+            <div className="auth-highlight-item">Scale from solo founder to sales team</div>
+          </div>
+        </section>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <h1 className="auth-title">Create Account</h1>
-          <p className="auth-subtitle">Join X-CRM today</p>
+        <section className="auth-panel auth-form-panel">
+          <p className="auth-badge">Create profile</p>
+          <h3 className="auth-title">Start your workspace</h3>
+          <p className="auth-subtitle">Complete your details now. You can wire this screen to API signup next.</p>
 
-          {error && (
+          <form onSubmit={handleSubmit} className="auth-form">
+
+          {error ? (
             <div className="auth-error">
-              <span className="error-icon">⚠</span>
+              <span className="error-icon">!</span>
               {error}
             </div>
-          )}
-          {success && (
+          ) : null}
+
+          {success ? (
             <div className="auth-success">
-              <span className="success-icon">✓</span>
+              <span className="success-icon">+</span>
               {success}
             </div>
-          )}
+          ) : null}
 
           <div className="form-group">
             <label htmlFor="name" className="form-label">Full Name</label>
@@ -114,6 +158,38 @@ export default function SignupPage() {
               disabled={loading}
               autoComplete="name"
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="company" className="form-label">Company Name</label>
+            <input
+              id="company"
+              type="text"
+              className="form-input"
+              placeholder="Acme Labs"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              required
+              disabled={loading}
+              autoComplete="organization"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="role" className="form-label">Primary Role</label>
+            <select
+              id="role"
+              className="form-input"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              disabled={loading}
+            >
+              <option>Founder</option>
+              <option>Sales Lead</option>
+              <option>Operations</option>
+              <option>Marketing</option>
+              <option>Support</option>
+            </select>
           </div>
 
           <div className="form-group">
@@ -158,7 +234,7 @@ export default function SignupPage() {
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
               >
-                {showPassword ? '🙈' : '👁'}
+                {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
             {password && (
@@ -206,6 +282,20 @@ export default function SignupPage() {
             </label>
           </div>
 
+          <div className="checkbox-group">
+            <input
+              id="updates"
+              type="checkbox"
+              checked={wantsUpdates}
+              onChange={(e) => setWantsUpdates(e.target.checked)}
+              disabled={loading}
+              className="checkbox-input"
+            />
+            <label htmlFor="updates" className="checkbox-label">
+              Send me product updates and onboarding tips
+            </label>
+          </div>
+
           <button
             type="submit"
             className="auth-button"
@@ -230,6 +320,7 @@ export default function SignupPage() {
             </Link>
           </p>
         </div>
+        </section>
       </div>
     </main>
   );

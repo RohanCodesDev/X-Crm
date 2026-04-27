@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Script from 'next/script';
 
 export default function DashboardPage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  const [authToken, setAuthToken] = useState('');
+  const [demoMode, setDemoMode] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState({
@@ -24,6 +28,86 @@ export default function DashboardPage() {
   });
   const [savingForm, setSavingForm] = useState(false);
   const [syncingId, setSyncingId] = useState('');
+  const [googleScriptReady, setGoogleScriptReady] = useState(false);
+
+  async function requestGoogleSheetsAccessToken() {
+    if (!googleClientId) {
+      throw new Error('Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID for Google Sheets access.');
+    }
+
+    if (!window.google?.accounts?.oauth2) {
+      throw new Error('Google OAuth script is not ready yet. Please try again.');
+    }
+
+    return new Promise((resolve, reject) => {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+        callback: (response) => {
+          if (response?.access_token) {
+            resolve(response.access_token);
+            return;
+          }
+
+          reject(new Error('Could not retrieve Google Sheets access token.'));
+        }
+      });
+
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    });
+  }
+
+  function loadDemoData() {
+    setStats({
+      connectedForms: 2,
+      totalRespondents: 48,
+      syncRuns: 6,
+      campaigns: 1
+    });
+
+    setForms([
+      {
+        id: 'demo-form-1',
+        name: 'Website Lead Form',
+        sheetName: 'Form Responses 1',
+        status: 'active',
+        lastSyncedAt: new Date().toISOString(),
+        _count: { respondents: 31 }
+      },
+      {
+        id: 'demo-form-2',
+        name: 'Webinar Registration',
+        sheetName: 'Responses',
+        status: 'active',
+        lastSyncedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+        _count: { respondents: 17 }
+      }
+    ]);
+
+    setRespondents([
+      {
+        id: 'demo-resp-1',
+        name: 'Avery Stone',
+        email: 'avery@example.com',
+        sourceRowNumber: 2,
+        formConnection: { name: 'Website Lead Form' }
+      },
+      {
+        id: 'demo-resp-2',
+        name: 'Mila Cortez',
+        email: 'mila@example.com',
+        sourceRowNumber: 3,
+        formConnection: { name: 'Webinar Registration' }
+      },
+      {
+        id: 'demo-resp-3',
+        name: 'Noah Reed',
+        email: 'noah@example.com',
+        sourceRowNumber: 4,
+        formConnection: { name: 'Website Lead Form' }
+      }
+    ]);
+  }
 
   const statsCards = useMemo(
     () => [
@@ -47,24 +131,52 @@ export default function DashboardPage() {
     }));
   }, [forms]);
 
+  function buildAuthHeaders(extraHeaders = {}) {
+    if (!authToken) {
+      return extraHeaders;
+    }
+
+    return {
+      ...extraHeaders,
+      Authorization: `Bearer ${authToken}`
+    };
+  }
+
+  function handleUnauthorized(response, data) {
+    if (response.status === 401) {
+      localStorage.removeItem('xcrmGoogleIdToken');
+      window.location.href = '/login';
+      throw new Error(data?.message || 'Session expired. Please sign in again.');
+    }
+  }
+
   async function fetchStats() {
-    const response = await fetch(`${apiBase}/crm/stats`);
+    const response = await fetch(`${apiBase}/crm/stats`, {
+      headers: buildAuthHeaders()
+    });
     const data = await response.json();
+    handleUnauthorized(response, data);
     if (!response.ok) throw new Error(data.message || 'Could not fetch stats');
     setStats(data);
   }
 
   async function fetchForms() {
-    const response = await fetch(`${apiBase}/crm/forms`);
+    const response = await fetch(`${apiBase}/crm/forms`, {
+      headers: buildAuthHeaders()
+    });
     const data = await response.json();
+    handleUnauthorized(response, data);
     if (!response.ok) throw new Error(data.message || 'Could not fetch forms');
     setForms(data.forms || []);
   }
 
   async function fetchRespondents(searchValue = '') {
     const query = searchValue ? `?q=${encodeURIComponent(searchValue)}` : '';
-    const response = await fetch(`${apiBase}/crm/respondents${query}`);
+    const response = await fetch(`${apiBase}/crm/respondents${query}`, {
+      headers: buildAuthHeaders()
+    });
     const data = await response.json();
+    handleUnauthorized(response, data);
     if (!response.ok) throw new Error(data.message || 'Could not fetch respondents');
     setRespondents(data.respondents || []);
   }
@@ -79,16 +191,40 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    bootstrap();
+    const isDemoMode = localStorage.getItem('xcrmDemoMode') === 'true';
+
+    if (isDemoMode) {
+      setDemoMode(true);
+      setUiMessage('You are viewing Demo Mode. Sign in with Google to use live data.');
+      loadDemoData();
+      return;
+    }
+
+    const storedToken = localStorage.getItem('xcrmGoogleIdToken') || '';
+    if (!storedToken) {
+      window.location.href = '/login';
+      return;
+    }
+
+    setDemoMode(false);
+    setAuthToken(storedToken);
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'respondents') {
+    if (!authToken || demoMode) {
+      return;
+    }
+
+    bootstrap();
+  }, [authToken, demoMode]);
+
+  useEffect(() => {
+    if (activeTab === 'respondents' && !demoMode) {
       fetchRespondents(respondentSearch).catch((error) => {
         setUiError(error.message || 'Failed to search respondents');
       });
     }
-  }, [activeTab]);
+  }, [activeTab, demoMode]);
 
   function parseSheetId(raw) {
     const trimmed = (raw || '').trim();
@@ -104,6 +240,11 @@ export default function DashboardPage() {
     setUiError('');
     setUiMessage('');
 
+    if (demoMode) {
+      setUiMessage('Demo Mode: form connection is disabled. Sign in with Google to connect live forms.');
+      return;
+    }
+
     const sheetId = parseSheetId(formPayload.sheetId);
     if (!formPayload.name || !sheetId) {
       setUiError('Form name and Sheet ID/URL are required');
@@ -114,7 +255,7 @@ export default function DashboardPage() {
       setSavingForm(true);
       const response = await fetch(`${apiBase}/crm/forms`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name: formPayload.name.trim(),
           sheetId,
@@ -123,6 +264,7 @@ export default function DashboardPage() {
       });
 
       const data = await response.json();
+      handleUnauthorized(response, data);
       if (!response.ok) throw new Error(data.message || 'Could not create form connection');
 
       setUiMessage('Form connected successfully. Click Sync Now to import responses.');
@@ -137,15 +279,32 @@ export default function DashboardPage() {
   }
 
   async function handleSyncForm(formId) {
+    if (demoMode) {
+      setUiMessage('Demo Mode: sync is disabled. Sign in with Google to run live sync.');
+      return;
+    }
+
     try {
       setSyncingId(formId);
       setUiError('');
       setUiMessage('');
 
+      let googleAccessToken;
+      if (googleScriptReady) {
+        googleAccessToken = await requestGoogleSheetsAccessToken();
+      }
+
       const response = await fetch(`${apiBase}/crm/forms/${formId}/sync`, {
-        method: 'POST'
+        method: 'POST',
+        headers: buildAuthHeaders({
+          'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+          googleAccessToken
+        })
       });
       const data = await response.json();
+      handleUnauthorized(response, data);
 
       if (!response.ok) throw new Error(data.message || 'Sync failed');
 
@@ -160,6 +319,25 @@ export default function DashboardPage() {
 
   async function handleRespondentSearch(event) {
     event.preventDefault();
+
+    if (demoMode) {
+      const lowered = respondentSearch.trim().toLowerCase();
+      if (!lowered) {
+        loadDemoData();
+        return;
+      }
+
+      setRespondents((prev) =>
+        prev.filter(
+          (item) =>
+            item.name?.toLowerCase().includes(lowered) ||
+            item.email?.toLowerCase().includes(lowered) ||
+            item.formConnection?.name?.toLowerCase().includes(lowered)
+        )
+      );
+      return;
+    }
+
     try {
       setUiError('');
       await fetchRespondents(respondentSearch);
@@ -170,6 +348,12 @@ export default function DashboardPage() {
 
   return (
     <main className="dashboard-main">
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => setGoogleScriptReady(true)}
+      />
+
       {showConnectModal && (
         <div className="modal-overlay">
           <div className="modal-card">
@@ -258,8 +442,14 @@ export default function DashboardPage() {
         </nav>
 
         <div className="sidebar-footer">
-          <Link href="/">
-            <button className="sidebar-logout">
+          <Link href="/login">
+            <button
+              className="sidebar-logout"
+              onClick={() => {
+                localStorage.removeItem('xcrmGoogleIdToken');
+                localStorage.removeItem('xcrmDemoMode');
+              }}
+            >
               <span className="nav-icon">🚪</span>
               {sidebarOpen && <span>Sign Out</span>}
             </button>

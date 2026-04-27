@@ -1,153 +1,213 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Script from 'next/script';
 
 export default function LoginPage() {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!email || !password) {
-      setError('Please fill in all fields');
+  function initializeGoogleButton() {
+    if (!window.google || !googleClientId) {
       return;
     }
 
-    setLoading(true);
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (response) => {
+        if (!response?.credential) {
+          setError('Google sign-in failed. Please try again.');
+          return;
+        }
 
-    try {
-      // TODO: Implement actual login API call
-      console.log('Login attempt:', { email, password, rememberMe });
-      // For now, just show a message
-      setError('Authentication backend coming soon');
-    } catch (err) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
+        localStorage.removeItem('xcrmDemoMode');
+        localStorage.setItem('xcrmGoogleIdToken', response.credential);
+        window.location.href = '/dashboard';
+      }
+    });
+
+    window.google.accounts.id.renderButton(document.getElementById('google-signin-button'), {
+      theme: 'outline',
+      size: 'large',
+      width: '320',
+      text: 'signin_with'
+    });
+
+    setGoogleReady(true);
+    setGoogleLoading(false);
+  }
+
+  useEffect(() => {
+    if (!googleClientId) {
+      setError('Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend environment.');
+      setGoogleLoading(false);
     }
-  };
+  }, [googleClientId]);
 
   const handleContinueWithout = () => {
-    // TODO: Set temporary session/demo mode
-    console.log('Continue without registering');
+    localStorage.removeItem('xcrmGoogleIdToken');
+    localStorage.setItem('xcrmDemoMode', 'true');
     window.location.href = '/dashboard';
   };
 
+  async function handleEmailLogin(event) {
+    event.preventDefault();
+    setError('');
+
+    if (!email.trim() || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${apiBase}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+
+      localStorage.removeItem('xcrmDemoMode');
+      localStorage.setItem('xcrmGoogleIdToken', data.token);
+      window.location.href = '/dashboard';
+    } catch (loginError) {
+      setError(loginError.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <main className="auth-container">
-      <div className="auth-card">
-        <Link href="/">
-          <h2 className="auth-logo">X-CRM</h2>
-        </Link>
+    <main className="auth-shell">
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => initializeGoogleButton()}
+        onError={() => {
+          setGoogleLoading(false);
+          setError('Could not load Google sign-in script.');
+        }}
+      />
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <h1 className="auth-title">Sign In</h1>
-          <p className="auth-subtitle">Access your CRM dashboard</p>
+      <div className="auth-grid">
+        <section className="auth-panel auth-brand-panel">
+          <Link href="/" className="auth-logo-link">
+            <h2 className="auth-logo">X-CRM</h2>
+          </Link>
+          <p className="auth-kicker">Lead Intelligence Workspace</p>
+          <h1 className="auth-hero-title">Close the loop between forms and revenue.</h1>
+          <p className="auth-hero-subtitle">
+            Connect Google Forms, classify intent, and route every qualified response to the right follow-up.
+          </p>
+          <div className="auth-highlights">
+            <div className="auth-highlight-item">Permission-based form access</div>
+            <div className="auth-highlight-item">Unified response dashboard</div>
+            <div className="auth-highlight-item">Fast Google sign-in onboarding</div>
+          </div>
+        </section>
 
-          {error && (
+        <section className="auth-panel auth-form-panel">
+          <p className="auth-badge">Welcome back</p>
+          <h3 className="auth-title">Sign in to your workspace</h3>
+          <p className="auth-subtitle">Sign in with email or Google to view and edit forms by access level.</p>
+
+          {error ? (
             <div className="auth-error">
-              <span className="error-icon">⚠</span>
+              <span className="error-icon">!</span>
               {error}
             </div>
-          )}
+          ) : null}
 
-          <div className="form-group">
-            <label htmlFor="email" className="form-label">Email Address</label>
-            <input
-              id="email"
-              type="email"
-              className="form-input"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-              autoComplete="email"
-            />
+          <div className="google-slot">
+            <div id="google-signin-button" />
           </div>
 
-          <div className="form-group">
-            <div className="password-header">
-              <label htmlFor="password" className="form-label">Password</label>
-              <Link href="#" className="forgot-password">
-                Forgot?
-              </Link>
-            </div>
-            <div className="password-input-wrapper">
+          {googleLoading && !error ? <p className="auth-meta">Loading Google Sign-In...</p> : null}
+          {googleReady ? <p className="auth-meta">Successful sign-in redirects you to dashboard automatically.</p> : null}
+
+          <div className="auth-divider">or</div>
+
+          <form onSubmit={handleEmailLogin} className="auth-form">
+            <div className="form-group">
+              <label htmlFor="login-email" className="form-label">Email</label>
               <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
+                id="login-email"
+                type="email"
                 className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={loading}
+                autoComplete="email"
                 required
-                disabled={loading}
-                autoComplete="current-password"
               />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={loading}
-              >
-                {showPassword ? '🙈' : '👁'}
-              </button>
             </div>
-          </div>
 
-          <div className="checkbox-group">
-            <input
-              id="rememberMe"
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              disabled={loading}
-              className="checkbox-input"
-            />
-            <label htmlFor="rememberMe" className="checkbox-label">
-              Remember me for 30 days
-            </label>
-          </div>
+            <div className="form-group">
+              <label htmlFor="login-password" className="form-label">Password</label>
+              <div className="password-input-wrapper">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={loading}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  disabled={loading}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                Signing in...
-              </>
-            ) : (
-              'Sign In'
-            )}
+            <button type="submit" className="auth-button" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="spinner"></span>
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+
+          <div className="auth-divider">or</div>
+
+          <button onClick={handleContinueWithout} className="auth-button-secondary" type="button">
+            Continue in Demo Mode
           </button>
-        </form>
 
-        <div className="auth-divider"></div>
-
-        <button
-          onClick={handleContinueWithout}
-          className="auth-button-secondary"
-        >
-          Continue Without Registering
-        </button>
-
-        <div className="auth-footer">
-          <p>
-            Don't have an account?{' '}
-            <Link href="/signup" className="auth-link">
-              Create one now
-            </Link>
-          </p>
-        </div>
+          <div className="auth-footer">
+            <p>
+              New here? <Link href="/signup" className="auth-link">Create account profile</Link>
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );
