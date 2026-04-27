@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
+import { Button3D } from '../components/buttons';
 
 const getPasswordStrength = (password) => {
   if (!password) return { score: 0, label: '', color: '' };
@@ -110,7 +111,7 @@ export default function SignupPage() {
       <div className="auth-grid signup-grid">
         <section className="auth-panel auth-brand-panel">
           <Link href="/" className="auth-logo-link">
-            <h2 className="auth-logo">X-CRM</h2>
+            <img src="/logo.png" alt="X-CRM Logo" className="auth-logo-img" style={{ height: '130px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
           </Link>
           <p className="auth-kicker">Get Setup In Minutes</p>
           <h1 className="auth-hero-title">Build your team-ready CRM layer on top of forms.</h1>
@@ -296,20 +297,18 @@ export default function SignupPage() {
             </label>
           </div>
 
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                Creating account...
-              </>
-            ) : (
-              'Create Account'
-            )}
-          </button>
+          <div style={{ marginTop: '20px', display: 'flex', width: '100%' }}>
+            <Button3D type="submit" disabled={loading} style={{ width: '100%' }}>
+              {loading ? (
+                <>
+                  <span className="spinner" style={{ marginRight: '8px' }}></span>
+                  Creating account...
+                </>
+              ) : (
+                'Create Account'
+              )}
+            </Button3D>
+          </div>
         </form>
 
         <div className="auth-footer">

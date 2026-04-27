@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
+import { Button3D } from '../components/buttons';
 
 export default function LoginPage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
@@ -108,7 +109,7 @@ export default function LoginPage() {
       <div className="auth-grid">
         <section className="auth-panel auth-brand-panel">
           <Link href="/" className="auth-logo-link">
-            <h2 className="auth-logo">X-CRM</h2>
+            <img src="/logo.png" alt="X-CRM Logo" className="auth-logo-img" style={{ height: '130px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
           </Link>
           <p className="auth-kicker">Lead Intelligence Workspace</p>
           <h1 className="auth-hero-title">Close the loop between forms and revenue.</h1>
@@ -184,23 +185,27 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button type="submit" className="auth-button" disabled={loading}>
-              {loading ? (
-                <>
-                  <span className="spinner"></span>
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
+            <div style={{ marginTop: '16px', display: 'flex', width: '100%' }}>
+              <Button3D type="submit" disabled={loading} style={{ width: '100%' }}>
+                {loading ? (
+                  <>
+                    <span className="spinner" style={{ marginRight: '8px' }}></span>
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </Button3D>
+            </div>
           </form>
 
           <div className="auth-divider">or</div>
 
-          <button onClick={handleContinueWithout} className="auth-button-secondary" type="button">
-            Continue in Demo Mode
-          </button>
+          <div style={{ display: 'flex', width: '100%' }}>
+            <Button3D onClick={handleContinueWithout} type="button" style={{ width: '100%' }}>
+              Continue in Demo Mode
+            </Button3D>
+          </div>
 
           <div className="auth-footer">
             <p>

@@ -394,7 +394,9 @@ export default function DashboardPage() {
       {/* Sidebar */}
       <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
         <div className="sidebar-header">
-          <h2 className="sidebar-logo">X-CRM</h2>
+          <div className="sidebar-logo">
+            <img src="/logo.png" alt="X-CRM Logo" style={{ height: '75px', objectFit: 'contain', marginLeft: '-15px' }} />
+          </div>
           <button
             className="sidebar-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
