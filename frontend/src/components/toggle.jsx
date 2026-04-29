@@ -1,7 +1,4 @@
-'use client';
-
 import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
 
 const ThemeToggle = () => {
   const [isLight, setIsLight] = useState(false);
@@ -14,118 +11,29 @@ const ThemeToggle = () => {
     }
   }, []);
 
-  const handleToggle = () => {
-    const next = !isLight;
+  const handleToggle = (e) => {
+    const next = e.target.checked;
     setIsLight(next);
     document.documentElement.setAttribute('data-theme', next ? 'light' : 'dark');
     localStorage.setItem('xcrm-theme', next ? 'light' : 'dark');
   };
 
   return (
-    <StyledWrapper>
-      <div className="toggle-wrapper" title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}>
-        <input
-          className="toggle-checkbox"
-          type="checkbox"
+    <div className="toggle-container">
+      <label className="toggle-switch">
+        <input 
+          className="toggle-checkbox" 
+          type="checkbox" 
           checked={isLight}
           onChange={handleToggle}
+          aria-label="Toggle theme"
         />
-        <div className="toggle-container">
-          <div className="toggle-button">
-            <div className="toggle-button-circles-container">
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-              <div className="toggle-button-circle" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </StyledWrapper>
+        <div className="toggle-indicator left" />
+        <div className="toggle-indicator right" />
+        <div className="toggle-button" />
+      </label>
+    </div>
   );
 };
-
-const StyledWrapper = styled.div`
-  .toggle-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    border-radius: .5em;
-    padding: .125em;
-    background-image: linear-gradient(to bottom, #d5d5d5, #e8e8e8);
-    box-shadow: 0 1px 1px rgb(255 255 255 / .6);
-    font-size: 1.5em;
-  }
-
-  .toggle-checkbox {
-    appearance: none;
-    position: absolute;
-    z-index: 1;
-    border-radius: inherit;
-    width: 100%;
-    height: 100%;
-    font: inherit;
-    opacity: 0;
-    cursor: pointer;
-  }
-
-  .toggle-container {
-    display: flex;
-    align-items: center;
-    position: relative;
-    border-radius: .375em;
-    width: 3em;
-    height: 1.5em;
-    background-color: #e8e8e8;
-    box-shadow: inset 0 0 .0625em .125em rgb(255 255 255 / .2), inset 0 .0625em .125em rgb(0 0 0 / .4);
-    transition: background-color .4s linear;
-  }
-
-  .toggle-checkbox:checked + .toggle-container {
-    background-color: #f3b519;
-  }
-
-  .toggle-button {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: absolute;
-    left: .0625em;
-    border-radius: .3125em;
-    width: 1.375em;
-    height: 1.375em;
-    background-color: #e8e8e8;
-    box-shadow: inset 0 -.0625em .0625em .125em rgb(0 0 0 / .1), inset 0 -.125em .0625em rgb(0 0 0 / .2), inset 0 .1875em .0625em rgb(255 255 255 / .3), 0 .125em .125em rgb(0 0 0 / .5);
-    transition: left .4s;
-  }
-
-  .toggle-checkbox:checked + .toggle-container > .toggle-button {
-    left: 1.5625em;
-  }
-
-  .toggle-button-circles-container {
-    display: grid;
-    grid-template-columns: repeat(3, min-content);
-    gap: .125em;
-    position: absolute;
-    margin: 0 auto;
-  }
-
-  .toggle-button-circle {
-    border-radius: 50%;
-    width: .125em;
-    height: .125em;
-    background-image: radial-gradient(circle at 50% 0, #f5f5f5, #c4c4c4);
-  }
-`;
 
 export default ThemeToggle;

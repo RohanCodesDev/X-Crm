@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
-import { Button3D } from '../components/buttons';
 import ThemeToggle from '../components/toggle';
 import GoogleButton from '../components/google-button';
 
@@ -144,9 +143,17 @@ export default function LoginPage() {
           <div id="google-signin-button" style={{ display: 'none' }} />
 
           <GoogleButton onClick={() => {
+            if (!googleReady) {
+              setError('Google Sign-In is still loading. Please try again.');
+              return;
+            }
             const gBtn = document.querySelector('#google-signin-button div[role=button]');
-            if (gBtn) gBtn.click();
-          }} />
+            if (gBtn) {
+              gBtn.click();
+            } else {
+              setError('Could not find Google Sign-In button. Please try again.');
+            }
+          }} disabled={!googleReady} />
 
           {googleLoading && !error ? <p className="auth-meta">Loading Google Sign-In...</p> : null}
           {googleReady ? <p className="auth-meta">Successful sign-in redirects you to dashboard automatically.</p> : null}
@@ -194,26 +201,26 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: '16px', display: 'flex', width: '100%' }}>
-              <Button3D type="submit" disabled={loading} style={{ width: '100%' }}>
+            <div className="auth-action-row">
+              <button type="submit" className="auth-btn auth-btn-primary" disabled={loading}>
                 {loading ? (
                   <>
-                    <span className="spinner" style={{ marginRight: '8px' }}></span>
+                    <span className="spinner spinner-inline"></span>
                     Signing in...
                   </>
                 ) : (
                   'Sign In'
                 )}
-              </Button3D>
+              </button>
             </div>
           </form>
 
           <div className="auth-divider">or</div>
 
-          <div style={{ display: 'flex', width: '100%' }}>
-            <Button3D onClick={handleContinueWithout} type="button" style={{ width: '100%' }}>
+          <div className="auth-action-row">
+            <button type="button" className="auth-btn auth-btn-secondary" onClick={handleContinueWithout}>
               Continue in Demo Mode
-            </Button3D>
+            </button>
           </div>
 
           <div className="auth-footer">
