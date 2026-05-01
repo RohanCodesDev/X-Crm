@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Button3D } from '../components/buttons';
 import ThemeToggle from '../components/toggle';
+import { getApiBaseUrl } from '../lib/api-base';
 
 const getPasswordStrength = (password) => {
   if (!password) return { score: 0, label: '', color: '' };
@@ -24,7 +25,7 @@ const getPasswordStrength = (password) => {
 };
 
 export default function SignupPage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const apiBase = getApiBaseUrl();
   const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

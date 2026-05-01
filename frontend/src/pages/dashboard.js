@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Script from 'next/script';
 import ThemeToggle from '../components/toggle';
+import { getApiBaseUrl } from '../lib/api-base';
 
 export default function DashboardPage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const apiBase = getApiBaseUrl();
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
   const [authToken, setAuthToken] = useState('');
   const [demoMode, setDemoMode] = useState(false);

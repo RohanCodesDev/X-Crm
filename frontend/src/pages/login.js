@@ -3,9 +3,10 @@ import Link from 'next/link';
 import Script from 'next/script';
 import ThemeToggle from '../components/toggle';
 import GoogleButton from '../components/google-button';
+import { getApiBaseUrl } from '../lib/api-base';
 
 export default function LoginPage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  const apiBase = getApiBaseUrl();
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
