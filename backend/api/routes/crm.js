@@ -140,6 +140,173 @@ router.get("/respondents", async (req, res) => {
   }
 });
 
+router.get("/respondents/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const respondent = await prisma.respondent.findUnique({
+      where: { id: String(id) },
+      include: {
+        formConnection: {
+          select: {
+            id: true,
+            name: true,
+            sheetName: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    if (!respondent) {
+      return res.status(404).json({ message: "Respondent not found" });
+    }
+
+    return res.status(200).json({ respondent });
+  } catch (error) {
+    return res.status(500).json({ message: "Could not fetch respondent details", detail: error.message });
+  }
+});
+
+router.get("/campaigns/summary", async (_req, res) => {
+  try {
+    const [totalRespondents, emailableRespondents, forms] = await Promise.all([
+      prisma.respondent.count(),
+      prisma.respondent.count({
+        where: {
+          email: {
+            not: null
+          }
+        }
+      }),
+      prisma.formConnection.findMany({
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: { respondents: true }
+          }
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      totalRespondents,
+      emailableRespondents,
+      forms: forms.map((form) => ({
+        id: form.id,
+        name: form.name,
+        respondents: form._count?.respondents || 0
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Could not fetch campaign summary", detail: error.message });
+  }
+});
+
+router.post("/campaigns/preview", async (req, res) => {
+  const { campaignType = "blast", q, limit = 20 } = req.body || {};
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 200));
+
+  try {
+    const recipientsCount = await prisma.respondent.count({
+      where: {
+        email: { not: null },
+        ...(q
+          ? {
+              OR: [
+                { email: { contains: String(q), mode: "insensitive" } },
+                { name: { contains: String(q), mode: "insensitive" } }
+              ]
+            }
+          : {})
+      }
+    });
+
+    const sampleRecipients = await prisma.respondent.findMany({
+      where: {
+        email: { not: null },
+        ...(q
+          ? {
+              OR: [
+                { email: { contains: String(q), mode: "insensitive" } },
+                { name: { contains: String(q), mode: "insensitive" } }
+              ]
+            }
+          : {})
+      },
+      orderBy: { createdAt: "desc" },
+      take: safeLimit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        formConnection: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    const suggestedSubject =
+      campaignType === "sequence"
+        ? "Your next step after submitting the form"
+        : "Quick update from our team";
+
+    const suggestedCta =
+      campaignType === "sequence"
+        ? "Schedule your qualification call"
+        : "Reply to this email to connect";
+
+    return res.status(200).json({
+      campaignType,
+      recipientsCount,
+      sampleRecipients,
+      suggestedSubject,
+      suggestedCta
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Could not prepare campaign preview", detail: error.message });
+  }
+});
+
+router.delete("/forms/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const existing = await prisma.formConnection.findUnique({
+      where: { id: String(id) },
+      include: {
+        _count: {
+          select: {
+            respondents: true,
+            syncRuns: true,
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Form connection not found" });
+    }
+
+    await prisma.formConnection.delete({ where: { id: existing.id } });
+
+    return res.status(200).json({
+      message: `Deleted ${existing.name}`,
+      deletedRespondents: existing._count.respondents,
+      deletedSyncRuns: existing._count.syncRuns,
+      deletedPermissions: existing._count.permissions
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Could not delete form", detail: error.message });
+  }
+});
+
 router.get("/stats", async (_req, res) => {
   try {
     const [formsCount, respondentsCount, syncRunsCount] = await Promise.all([
