@@ -49,6 +49,15 @@ export default function DashboardPage() {
   const [campaignPreview, setCampaignPreview] = useState(null);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [campaignLoading, setCampaignLoading] = useState(false);
+  const [manualBlastOpen, setManualBlastOpen] = useState(false);
+  const [manualBlastSending, setManualBlastSending] = useState(false);
+  const [manualBlastRecipientInput, setManualBlastRecipientInput] = useState('');
+  const [manualBlastPayload, setManualBlastPayload] = useState({
+    subject: '',
+    cc: '',
+    body: ''
+  });
+  const [manualBlastRecipients, setManualBlastRecipients] = useState([]);
 
   const tabCopy = {
     overview: {
@@ -891,6 +900,177 @@ export default function DashboardPage() {
     setUiMessage('Campaign draft prepared. Integrate your email provider to send this to recipients.');
   }
 
+  function extractEmailsFromInput(rawInput) {
+    const matches = String(rawInput || '').match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g);
+    if (!matches) {
+      return [];
+    }
+
+    const unique = new Set(matches.map((entry) => entry.trim().toLowerCase()).filter(Boolean));
+    return Array.from(unique);
+  }
+
+  function handleAddManualRecipients() {
+    const parsedEmails = extractEmailsFromInput(manualBlastRecipientInput);
+
+    if (parsedEmails.length === 0) {
+      setUiError('Add at least one valid recipient email.');
+      return;
+    }
+
+    setUiError('');
+    setManualBlastRecipients((current) => {
+      const existing = new Set(current.map((item) => item.email.toLowerCase()));
+      const toAdd = parsedEmails
+        .filter((email) => !existing.has(email))
+        .map((email, index) => ({
+          id: `${Date.now()}-${index}-${email}`,
+          email,
+          count: 1,
+          sentCount: 0,
+          lastStatus: 'idle',
+          lastError: ''
+        }));
+
+      return [...current, ...toAdd];
+    });
+    setManualBlastRecipientInput('');
+  }
+
+  function handleRemoveManualRecipient(recipientId) {
+    setManualBlastRecipients((current) => current.filter((item) => item.id !== recipientId));
+  }
+
+  function handleManualRecipientCountChange(recipientId, delta) {
+    setManualBlastRecipients((current) =>
+      current.map((item) => {
+        if (item.id !== recipientId) {
+          return item;
+        }
+
+        const nextCount = Math.max(1, Math.min(20, Number(item.count || 1) + Number(delta || 0)));
+        return {
+          ...item,
+          count: nextCount
+        };
+      })
+    );
+  }
+
+  function escapeHtmlForEmail(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  async function handleSendManualBlast(event) {
+    event.preventDefault();
+    setUiError('');
+    setUiMessage('');
+
+    if (!manualBlastRecipients.length) {
+      setUiError('Add at least one recipient before sending.');
+      return;
+    }
+
+    if (!manualBlastPayload.subject.trim()) {
+      setUiError('Subject is required.');
+      return;
+    }
+
+    if (!manualBlastPayload.body.trim()) {
+      setUiError('Email body is required.');
+      return;
+    }
+
+    if (demoMode) {
+      const updated = manualBlastRecipients.map((recipient) => ({
+        ...recipient,
+        sentCount: Number(recipient.count || 1),
+        lastStatus: 'sent',
+        lastError: ''
+      }));
+      setManualBlastRecipients(updated);
+      setUiMessage(
+        `Demo Mode: prepared ${updated.reduce((sum, item) => sum + Number(item.sentCount || 0), 0)} emails.`
+      );
+      return;
+    }
+
+    setManualBlastSending(true);
+
+    try {
+      const renderedHtml = `<div>${escapeHtmlForEmail(manualBlastPayload.body).replace(/\n/g, '<br/>')}</div>`;
+      let totalSent = 0;
+      let failedRecipients = 0;
+      const ccValue = manualBlastPayload.cc.trim();
+
+      const nextRecipients = [];
+
+      for (const recipient of manualBlastRecipients) {
+        let sentCount = 0;
+        let lastError = '';
+
+        for (let attempt = 0; attempt < Number(recipient.count || 1); attempt += 1) {
+          try {
+            const response = await fetch(`${apiBase}/sendemail/send`, {
+              method: 'POST',
+              headers: buildAuthHeaders({
+                'Content-Type': 'application/json'
+              }),
+              body: JSON.stringify({
+                to: recipient.email,
+                cc: ccValue || undefined,
+                subject: manualBlastPayload.subject,
+                templateHtml: renderedHtml,
+                templateText: manualBlastPayload.body
+              })
+            });
+
+            const data = await response.json();
+            handleUnauthorized(response, data);
+
+            if (!response.ok) {
+              throw new Error(data.message || `Failed to send email to ${recipient.email}`);
+            }
+
+            sentCount += 1;
+            totalSent += 1;
+          } catch (error) {
+            lastError = error.message || 'Send failed';
+            break;
+          }
+        }
+
+        if (sentCount < Number(recipient.count || 1)) {
+          failedRecipients += 1;
+        }
+
+        nextRecipients.push({
+          ...recipient,
+          sentCount,
+          lastStatus: sentCount > 0 && !lastError ? 'sent' : sentCount > 0 ? 'partial' : 'failed',
+          lastError
+        });
+      }
+
+      setManualBlastRecipients(nextRecipients);
+
+      if (failedRecipients > 0) {
+        setUiError(`${failedRecipients} recipient(s) failed or partially failed. Check status in the Manual Blast modal.`);
+      }
+
+      setUiMessage(`Manual blast finished. Sent ${totalSent} email(s).`);
+    } catch (error) {
+      setUiError(error.message || 'Could not send manual blast');
+    } finally {
+      setManualBlastSending(false);
+    }
+  }
+
   return (
     <main className="dashboard-main">
       <Script
@@ -935,6 +1115,117 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {manualBlastOpen ? (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h3>+ Send Custom Emails</h3>
+            <p>Add one or more recipients, choose count per recipient, and send custom emails.</p>
+
+            <form onSubmit={handleSendManualBlast} className="modal-form">
+              <textarea
+                className="modal-input"
+                placeholder="Add recipient emails (comma, space, or newline separated)"
+                value={manualBlastRecipientInput}
+                onChange={(event) => setManualBlastRecipientInput(event.target.value)}
+                rows={3}
+              />
+              <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+                <button type="button" className="btn-secondary" onClick={handleAddManualRecipients}>
+                  Add Recipients
+                </button>
+              </div>
+
+              {manualBlastRecipients.length ? (
+                <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  {manualBlastRecipients.map((recipient) => (
+                    <div
+                      key={recipient.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto auto auto auto',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{recipient.email}</span>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleManualRecipientCountChange(recipient.id, -1)}
+                      >
+                        -
+                      </button>
+                      <span title="Emails to send for this recipient">{recipient.count}</span>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleManualRecipientCountChange(recipient.id, 1)}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-danger"
+                        onClick={() => handleRemoveManualRecipient(recipient.id)}
+                      >
+                        Remove
+                      </button>
+                      <span style={{ gridColumn: '1 / -1', fontSize: '0.82rem', opacity: 0.85 }}>
+                        Sent: {recipient.sentCount || 0}
+                        {recipient.lastError ? ` | Error: ${recipient.lastError}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <input
+                className="modal-input"
+                placeholder="Email subject"
+                value={manualBlastPayload.subject}
+                onChange={(event) =>
+                  setManualBlastPayload((prev) => ({ ...prev, subject: event.target.value }))
+                }
+              />
+              <input
+                className="modal-input"
+                placeholder="CC (optional, comma separated emails)"
+                value={manualBlastPayload.cc}
+                onChange={(event) =>
+                  setManualBlastPayload((prev) => ({ ...prev, cc: event.target.value }))
+                }
+              />
+              <textarea
+                className="modal-input"
+                placeholder="Email body"
+                rows={8}
+                value={manualBlastPayload.body}
+                onChange={(event) =>
+                  setManualBlastPayload((prev) => ({ ...prev, body: event.target.value }))
+                }
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setManualBlastOpen(false);
+                    setManualBlastSending(false);
+                  }}
+                  disabled={manualBlastSending}
+                >
+                  Close
+                </button>
+                <button type="submit" className="btn-primary" disabled={manualBlastSending}>
+                  {manualBlastSending ? 'Sending...' : 'Send Manual Blast'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       {campaignModalOpen && campaignPreview ? (
         <div className="modal-overlay">
@@ -1333,9 +1624,14 @@ export default function DashboardPage() {
             <section className="dashboard-section">
               <div className="section-header">
                 <h2>Email Campaigns</h2>
-                <button className="btn-primary" onClick={() => handlePrepareCampaign('broadcast')} disabled={campaignLoading}>
-                  {campaignLoading ? 'Preparing...' : '+ New Campaign'}
-                </button>
+                <div className="card-actions">
+                  <button className="btn-secondary" onClick={() => setManualBlastOpen(true)}>
+                    Manual Blast
+                  </button>
+                  <button className="btn-primary" onClick={() => handlePrepareCampaign('broadcast')} disabled={campaignLoading}>
+                    {campaignLoading ? 'Preparing...' : '+ New Campaign'}
+                  </button>
+                </div>
               </div>
 
               <div className="campaign-summary-row">
