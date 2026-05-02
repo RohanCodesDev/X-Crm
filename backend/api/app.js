@@ -2,6 +2,7 @@ const express = require("express");
 const healthRouter = require("./routes/health");
 const crmRouter = require("./routes/crm");
 const authRouter = require("./routes/auth");
+const sendEmailRouter = require("./routes/sendemail");
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.get("/", (_req, res) => {
 app.use("/health", healthRouter);
 app.use("/auth", authRouter);
 app.use("/crm", crmRouter);
+app.use("/sendemail", sendEmailRouter);
 
 module.exports = app;
