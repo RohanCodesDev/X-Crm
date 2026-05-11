@@ -21,8 +21,10 @@ const StyledWrapper = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    padding: 12px 28px;
+    width: auto;
+    min-width: 110px;
+    min-height: 44px;
+    padding: 10px 20px;
     font-size: 0.95rem;
     font-weight: 600;
     color: #ffffff;

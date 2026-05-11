@@ -2045,6 +2045,30 @@ body {
   box-shadow: none;
 }
 
+/* Fallback for buttons without explicit classes (keeps visuals consistent) */
+button:not([class]) {
+  padding: 8px 12px;
+  background: var(--dash-panel-soft);
+  color: var(--dash-text);
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-size: 0.875rem;
+}
+
+button:not([class]):hover {
+  border-color: rgba(20, 184, 166, 0.35);
+  transform: translateY(-1px);
+}
+
+button:not([class]):disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn-icon {
   width: 36px;
   height: 36px;
