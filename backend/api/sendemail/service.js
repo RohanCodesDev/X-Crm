@@ -1,5 +1,5 @@
 const nodemailer = require("nodemailer");
-const { htmlToText, renderTemplate } = require("./template");
+const { htmlToText, renderTemplate, wrapInPremiumTemplate } = require("./template");
 
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST;
@@ -60,7 +60,8 @@ async function sendEmailMessage(payload) {
     throw new Error("to, subject and templateHtml are required.");
   }
 
-  const html = renderTemplate(templateHtml, variables);
+  let html = renderTemplate(templateHtml, variables);
+  html = wrapInPremiumTemplate(html);
   const text = templateText
     ? renderTemplate(templateText, variables)
     : htmlToText(html);
