@@ -169,7 +169,7 @@ function wrapInPremiumTemplate(content) {
   <div class="email-wrapper">
     <div class="email-container">
       <div class="email-header">
-        <h2 style="margin: 0; font-size: 24px; font-weight: 600;">Message</h2>
+        <h2 style="margin: 0; font-size: 24px; font-weight: 600;">Rohan's  Message</h2>
       </div>
       <div class="email-body">
         ${emailBody}
