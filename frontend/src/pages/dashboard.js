@@ -9,7 +9,6 @@ export default function DashboardPage() {
   const [authToken, setAuthToken] = useState('');
   const [demoMode, setDemoMode] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState({
     connectedForms: 0,
     totalRespondents: 0,
@@ -26,6 +25,8 @@ export default function DashboardPage() {
   const [respondentSearch, setRespondentSearch] = useState('');
   const [respondentSortOrder, setRespondentSortOrder] = useState('none');
   const [respondentFilterOpen, setRespondentFilterOpen] = useState(false);
+  const [selectedFormFilter, setSelectedFormFilter] = useState('');
+  const [selectedCampaignFormFilter, setSelectedCampaignFormFilter] = useState('');
   const [uiError, setUiError] = useState('');
   const [uiMessage, setUiMessage] = useState('');
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -61,24 +62,24 @@ export default function DashboardPage() {
 
   const tabCopy = {
     overview: {
-      title: 'Performance Overview',
-      subtitle: 'Track forms, respondents, and sync health from one place.'
+      title: 'Dashboard',
+      subtitle: ''
     },
     forms: {
       title: 'Connected Forms',
-      subtitle: 'Manage data sources and run response syncs whenever needed.'
+      subtitle: ''
     },
     respondents: {
       title: 'Respondent Directory',
-      subtitle: 'Search, segment, and prepare outreach from recent submissions.'
+      subtitle: ''
     },
     campaigns: {
       title: 'Campaign Workspace',
-      subtitle: 'Set up bulk communication workflows for qualified leads.'
+      subtitle: ''
     },
     settings: {
-      title: 'Workspace Settings',
-      subtitle: 'Control account, security, and integration preferences.'
+      title: 'Settings',
+      subtitle: ''
     }
   };
 
@@ -193,16 +194,6 @@ export default function DashboardPage() {
       ]
     });
   }
-
-  const statsCards = useMemo(
-    () => [
-      { key: 'forms', label: 'Connected Forms', value: String(stats.connectedForms), marker: 'FM' },
-      { key: 'respondents', label: 'Total Respondents', value: String(stats.totalRespondents), marker: 'LE' },
-      { key: 'sync', label: 'Sync Runs', value: String(stats.syncRuns), marker: 'SY' },
-      { key: 'campaigns', label: 'Email Campaigns', value: String(stats.campaigns), marker: 'CP' }
-    ],
-    [stats]
-  );
 
   const recentActivity = useMemo(() => {
     if (forms.length === 0) {
@@ -1003,7 +994,23 @@ export default function DashboardPage() {
     setManualBlastSending(true);
 
     try {
-      const renderedHtml = `<div>${escapeHtmlForEmail(manualBlastPayload.body).replace(/\n/g, '<br/>')}</div>`;
+      const subjectText = manualBlastPayload.subject.trim();
+      const bodyText = manualBlastPayload.body.trim();
+      
+      if (!subjectText || !bodyText) {
+        throw new Error('Subject and body content are required');
+      }
+      
+      // Escape HTML special characters and convert newlines to <br/>
+      const escapedBody = String(bodyText)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\n/g, '<br/>');
+      
+      const renderedHtml = escapedBody;
       let totalSent = 0;
       let failedRecipients = 0;
       const ccValue = manualBlastPayload.cc.trim();
@@ -1016,30 +1023,44 @@ export default function DashboardPage() {
 
         for (let attempt = 0; attempt < Number(recipient.count || 1); attempt += 1) {
           try {
+            const requestBody = {
+              to: recipient.email,
+              subject: subjectText,
+              templateHtml: renderedHtml,
+              templateText: bodyText
+            };
+
+            if (ccValue) {
+              requestBody.cc = ccValue;
+            }
+
+            console.log('Sending email request:', {
+              to: requestBody.to,
+              subject: requestBody.subject,
+              templateHtmlLength: requestBody.templateHtml?.length,
+              templateTextLength: requestBody.templateText?.length
+            });
+
             const response = await fetch(`${apiBase}/sendemail/send`, {
               method: 'POST',
               headers: buildAuthHeaders({
                 'Content-Type': 'application/json'
               }),
-              body: JSON.stringify({
-                to: recipient.email,
-                cc: ccValue || undefined,
-                subject: manualBlastPayload.subject,
-                templateHtml: renderedHtml,
-                templateText: manualBlastPayload.body
-              })
+              body: JSON.stringify(requestBody)
             });
 
             const data = await response.json();
             handleUnauthorized(response, data);
 
             if (!response.ok) {
+              console.error('Email send error response:', data);
               throw new Error(data.message || `Failed to send email to ${recipient.email}`);
             }
 
             sentCount += 1;
             totalSent += 1;
           } catch (error) {
+            console.error('Email send error:', error);
             lastError = error.message || 'Send failed';
             break;
           }
@@ -1259,72 +1280,47 @@ export default function DashboardPage() {
       ) : null}
 
       {/* Sidebar */}
-      <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
+      <aside className="dashboard-sidebar open">
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <img src="/logo.png" alt="X-CRM Logo" />
           </div>
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          >
-            {sidebarOpen ? '‹' : '›'}
-          </button>
         </div>
 
-        {sidebarOpen ? (
-          <div className="sidebar-context">
-            <p className="sidebar-context-label">Workspace</p>
-            <p className="sidebar-context-value">Lead Operations</p>
-            <span className={`workspace-status ${demoMode ? 'demo' : 'live'}`}>
-              {demoMode ? 'Demo Session' : 'Live Session'}
-            </span>
+        <div className="sidebar-services">
+            <h3 className="sidebar-services-title">Services</h3>
+            <div className="sidebar-service-grid">
+              <button
+                className="sidebar-service-card"
+                onClick={() => setActiveTab('forms')}
+                title="Sync form responses from Google Sheets"
+              >
+                <div className="service-icon">📋</div>
+                <span>Form Sync</span>
+              </button>
+              <button
+                className="sidebar-service-card"
+                onClick={() => setActiveTab('respondents')}
+                title="View and analyze respondent data"
+              >
+                <div className="service-icon">📊</div>
+                <span>Respondent Data</span>
+              </button>
+              <button
+                className="sidebar-service-card"
+                onClick={() => setActiveTab('campaigns')}
+                title="Send custom emails and manage campaigns"
+              >
+                <div className="service-icon">✉️</div>
+                <span>Custom E-Mails</span>
+              </button>
+            </div>
           </div>
-        ) : null}
-
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            <span className="nav-icon">📊</span>
-            {sidebarOpen && <span>Overview</span>}
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'forms' ? 'active' : ''}`}
-            onClick={() => setActiveTab('forms')}
-          >
-            <span className="nav-icon">📋</span>
-            {sidebarOpen && <span>Forms</span>}
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'respondents' ? 'active' : ''}`}
-            onClick={() => setActiveTab('respondents')}
-          >
-            <span className="nav-icon">👥</span>
-            {sidebarOpen && <span>Respondents</span>}
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'campaigns' ? 'active' : ''}`}
-            onClick={() => setActiveTab('campaigns')}
-          >
-            <span className="nav-icon">📧</span>
-            {sidebarOpen && <span>Campaigns</span>}
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            <span className="nav-icon">⚙️</span>
-            {sidebarOpen && <span>Settings</span>}
-          </button>
-        </nav>
 
         <div className="sidebar-footer">
           <button className="sidebar-logout" onClick={handleSignOut}>
             <span className="nav-icon">⇦</span>
-            {sidebarOpen && <span>Sign Out</span>}
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
@@ -1334,7 +1330,6 @@ export default function DashboardPage() {
         {/* Header */}
         <header className="dashboard-header">
           <div className="header-left">
-            <p className="page-kicker">CRM Workspace</p>
             <h1 className="page-title">{tabCopy[activeTab]?.title}</h1>
             <p className="page-subtitle">{tabCopy[activeTab]?.subtitle}</p>
           </div>
@@ -1359,52 +1354,32 @@ export default function DashboardPage() {
             <>
               <section className="dashboard-section hero-panel">
                 <div className="hero-copy">
-                  <h2>Team Snapshot</h2>
-                  <p>Use quick actions to keep data fresh and your outreach moving.</p>
+                  <h2>Quick Actions</h2>
                 </div>
                 <div className="hero-actions">
                   <button className="btn-primary" onClick={handleSyncAllForms} disabled={syncingAll || forms.length === 0}>
                     {syncingAll ? 'Syncing All...' : 'Sync All Forms'}
                   </button>
-                  <button className="btn-secondary" onClick={() => setActiveTab('respondents')}>
-                    Open Respondents
+                  <button className="btn-secondary" onClick={() => setShowConnectModal(true)}>
+                    + Connect New Form
                   </button>
                   <button className="btn-secondary" onClick={() => setActiveTab('campaigns')}>
-                    Create Email Campaign
+                    Send Email
                   </button>
                 </div>
               </section>
 
-              {/* Stats Grid */}
-              <div className="stats-grid">
-                {statsCards.map((stat) => (
-                  <div key={stat.key} className="stat-card">
-                    <div className="stat-icon">{stat.marker}</div>
-                    <div className="stat-content">
-                      <p className="stat-label">{stat.label}</p>
-                      <h3 className="stat-value">{stat.value}</h3>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               <div className="overview-grid">
                 <section className="dashboard-section">
                   <div className="section-header">
-                    <h2>Connected Forms</h2>
-                    <button className="btn-primary" onClick={() => setShowConnectModal(true)}>
-                      + Connect New Form
-                    </button>
+                    <h2>Forms</h2>
                   </div>
 
                   {forms.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">FM</div>
-                      <h3>No forms connected yet</h3>
-                      <p>Connect your first Google Form to get started with X-CRM.</p>
-                      <button className="btn-primary" onClick={() => setShowConnectModal(true)}>
-                        Connect Your First Form
-                      </button>
+                      <h3>No forms connected</h3>
+                      <p>Connect a Google Form to begin</p>
                     </div>
                   ) : (
                     <div className="forms-list">
@@ -1418,9 +1393,6 @@ export default function DashboardPage() {
                             </p>
                           </div>
                           <div className="form-actions">
-                            <button className="btn-secondary" onClick={() => setActiveTab('respondents')}>
-                              View Responses
-                            </button>
                             <button
                               className="btn-secondary"
                               onClick={() => handleSyncForm(form.id)}
@@ -1444,12 +1416,11 @@ export default function DashboardPage() {
 
                 <section className="dashboard-section">
                   <div className="section-header">
-                    <h2>Recent Activity</h2>
+                    <h2>Activity</h2>
                   </div>
                   <div className="activity-list">
                     {recentActivity.map((item) => (
                       <div key={item.id} className="activity-item">
-                        <div className="activity-icon">AC</div>
                         <p>{item.message}</p>
                       </div>
                     ))}
@@ -1463,7 +1434,7 @@ export default function DashboardPage() {
           {activeTab === 'forms' && (
             <section className="dashboard-section">
               <div className="section-header">
-                <h2>Your Connected Forms</h2>
+                <h2>Forms</h2>
                 <button className="btn-primary" onClick={() => setShowConnectModal(true)}>
                   + Connect New Form
                 </button>
@@ -1471,8 +1442,8 @@ export default function DashboardPage() {
               {forms.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">FM</div>
-                  <h3>No forms configured</h3>
-                  <p>Connect a Google Form to start collecting and syncing responses.</p>
+                  <h3>No forms</h3>
+                  <p>Connect a Google Form to sync responses</p>
                 </div>
               ) : null}
 
@@ -1505,6 +1476,21 @@ export default function DashboardPage() {
           {activeTab === 'respondents' && (
             <section className="dashboard-section">
               <div className="section-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  
+                  <select
+                    value={selectedFormFilter}
+                    onChange={(e) => setSelectedFormFilter(e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--dash-border)', backgroundColor: 'var(--dash-panel-soft)', color: 'var(--dash-text)', cursor: 'pointer' }}
+                  >
+                    <option value="">All Forms</option>
+                    {forms.map((form) => (
+                      <option key={form.id} value={form.id}>
+                        {form.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <form className="search-filters" onSubmit={handleRespondentSearch}>
                   <input
                     type="text"
@@ -1582,17 +1568,17 @@ export default function DashboardPage() {
                       <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Form</th>
                         <th>Row</th>
                         <th>Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedRespondents.map((row) => (
+                      {sortedRespondents
+                        .filter((row) => !selectedFormFilter || row.formConnection?.id === selectedFormFilter)
+                        .map((row) => (
                         <tr key={row.id}>
                           <td>{row.name || '-'}</td>
                           <td>{row.email || '-'}</td>
-                          <td>{row.formConnection?.name || '-'}</td>
                           <td>{row.sourceRowNumber}</td>
                           <td>
                             <button className="btn-secondary table-action" type="button" onClick={() => handleOpenRespondent(row)}>
@@ -1623,10 +1609,24 @@ export default function DashboardPage() {
           {activeTab === 'campaigns' && (
             <section className="dashboard-section">
               <div className="section-header">
-                <h2>Email Campaigns</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <h2>Campaign Workspace</h2>
+                  <select
+                    value={selectedCampaignFormFilter}
+                    onChange={(e) => setSelectedCampaignFormFilter(e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--dash-border)', backgroundColor: 'var(--dash-panel-soft)', color: 'var(--dash-text)', cursor: 'pointer' }}
+                  >
+                    <option value="">All Forms</option>
+                    {forms.map((form) => (
+                      <option key={form.id} value={form.id}>
+                        {form.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="card-actions">
                   <button className="btn-secondary" onClick={() => setManualBlastOpen(true)}>
-                    Manual Blast
+                    Custom Email
                   </button>
                   <button className="btn-primary" onClick={() => handlePrepareCampaign('broadcast')} disabled={campaignLoading}>
                     {campaignLoading ? 'Preparing...' : '+ New Campaign'}
@@ -1652,7 +1652,7 @@ export default function DashboardPage() {
               <div className="campaign-grid">
                 <div className="settings-card">
                   <h3>Follow-up Sequence</h3>
-                  <p>Draft onboarding and qualification follow-ups from synced leads.</p>
+                  <p>Automated follow-ups</p>
                   <div className="card-actions">
                     <button className="btn-secondary" onClick={() => handlePrepareCampaign('sequence')} disabled={campaignLoading}>
                       Create Sequence
@@ -1661,7 +1661,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="settings-card">
                   <h3>Segment Broadcast</h3>
-                  <p>Send one update to filtered respondent segments by form source.</p>
+                  <p>Send to segments</p>
                   <div className="card-actions">
                     <button className="btn-secondary" onClick={() => handlePrepareCampaign('broadcast')} disabled={campaignLoading}>
                       Create Broadcast
@@ -1670,7 +1670,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="settings-card">
                   <h3>Delivery Analytics</h3>
-                  <p>Monitor open rate and click performance for recent campaigns.</p>
+                  <p>Track performance</p>
                   <div className="card-actions">
                     <button className="btn-secondary" onClick={fetchCampaignSummary} disabled={campaignLoading}>
                       View Metrics
@@ -1681,7 +1681,9 @@ export default function DashboardPage() {
 
               {campaignSummary.forms?.length ? (
                 <div className="campaign-sources-list">
-                  {campaignSummary.forms.map((source) => (
+                  {campaignSummary.forms
+                    .filter((source) => !selectedCampaignFormFilter || source.id === selectedCampaignFormFilter)
+                    .map((source) => (
                     <div key={source.id} className="campaign-source-item">
                       <span>{source.name}</span>
                       <strong>{source.respondents} leads</strong>
@@ -1695,32 +1697,32 @@ export default function DashboardPage() {
           {/* Settings Tab */}
           {activeTab === 'settings' && (
             <section className="dashboard-section">
-              <h2>Account Settings</h2>
+              <h2>Settings</h2>
               <div className="settings-grid">
                 <div className="settings-card">
                   <h3>Account</h3>
-                  <p>Manage your account information and preferences</p>
+                  <p>Account info</p>
                   <div className="card-actions">
                     <button className="btn-secondary">Edit Account</button>
                   </div>
                 </div>
                 <div className="settings-card">
                   <h3>Security</h3>
-                  <p>Update your password and security settings</p>
+                  <p>Password & security</p>
                   <div className="card-actions">
                     <button className="btn-secondary">Change Password</button>
                   </div>
                 </div>
                 <div className="settings-card">
                   <h3>Integrations</h3>
-                  <p>Manage connected services and API keys</p>
+                  <p>Connected services</p>
                   <div className="card-actions">
                     <button className="btn-secondary">Manage Integrations</button>
                   </div>
                 </div>
                 <div className="settings-card">
                   <h3>Billing</h3>
-                  <p>View your subscription and billing history</p>
+                  <p>Subscription & history</p>
                   <div className="card-actions">
                     <button className="btn-secondary">View Billing</button>
                   </div>
