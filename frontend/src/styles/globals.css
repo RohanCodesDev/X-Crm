@@ -399,6 +399,57 @@ body {
   transition: opacity 0.8s ease 0.3s, transform 0.8s ease 0.3s;
 }
 
+/* Page transition wrapper used by _app.js */
+.page-wrapper {
+  transition: opacity 260ms cubic-bezier(.2,.9,.2,1), transform 260ms cubic-bezier(.2,.9,.2,1);
+  opacity: 1;
+  transform: translateY(0);
+  will-change: opacity, transform;
+}
+
+.page-wrapper.is-transitioning {
+  opacity: 0.98;
+  transform: translateY(6px) scale(0.999);
+}
+
+/* Global button interaction polish */
+button,
+input[type="button"],
+input[type="submit"],
+.btn {
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  touch-action: manipulation;
+}
+
+button:active,
+input[type="button"]:active,
+input[type="submit"]:active,
+.btn:active {
+  transform: translateY(1px) scale(0.997);
+  opacity: 0.98;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(13,148,136,0.18);
+  outline-offset: 2px;
+}
+
+/* Fullscreen overlay shown during route transitions to avoid white flash */
+.transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms cubic-bezier(.2,.9,.2,1);
+  background: var(--background);
+}
+
+.transition-overlay.visible {
+  opacity: 1;
+}
+
 .landing-features.visible {
   opacity: 1;
   transform: translateY(0);
