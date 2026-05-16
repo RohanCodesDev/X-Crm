@@ -140,6 +140,41 @@ router.get("/respondents", async (req, res) => {
   }
 });
 
+router.get("/respondents/fields", async (req, res) => {
+  const { formId } = req.query;
+
+  try {
+    const respondents = await prisma.respondent.findMany({
+      where: formId ? { formConnectionId: String(formId) } : {},
+      select: {
+        rawData: true
+      }
+    });
+
+    const fieldNames = new Set();
+
+    for (const respondent of respondents) {
+      const rawData = respondent?.rawData;
+
+      if (!rawData || typeof rawData !== "object" || Array.isArray(rawData)) {
+        continue;
+      }
+
+      for (const key of Object.keys(rawData)) {
+        if (key) {
+          fieldNames.add(key);
+        }
+      }
+    }
+
+    return res.status(200).json({
+      fields: Array.from(fieldNames).sort((first, second) => first.localeCompare(second))
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Could not fetch respondent fields", detail: error.message });
+  }
+});
+
 router.get("/respondents/:id", async (req, res) => {
   const { id } = req.params;
 
