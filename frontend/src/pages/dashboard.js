@@ -27,6 +27,9 @@ export default function DashboardPage() {
   const [respondentFilterOpen, setRespondentFilterOpen] = useState(false);
   const [selectedFormFilter, setSelectedFormFilter] = useState('');
   const [selectedCampaignFormFilter, setSelectedCampaignFormFilter] = useState('');
+  const [respondentFieldDropdownOpen, setRespondentFieldDropdownOpen] = useState(false);
+  const [selectedRespondentFields, setSelectedRespondentFields] = useState([]);
+  const [availableRespondentFields, setAvailableRespondentFields] = useState([]);
   const [uiError, setUiError] = useState('');
   const [uiMessage, setUiMessage] = useState('');
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -184,6 +187,9 @@ export default function DashboardPage() {
     setRespondents(getDemoRespondents());
     setAllRespondents(getDemoRespondents());
     setRespondentsLoaded(true);
+    setAvailableRespondentFields(getDemoRespondentFields(selectedFormFilter));
+    setSelectedRespondentFields([]);
+    setRespondentFieldDropdownOpen(false);
 
     setCampaignSummary({
       totalRespondents: 48,
@@ -213,8 +219,13 @@ export default function DashboardPage() {
       return [];
     }
 
-    return Object.entries(payload).filter(([key]) => Boolean(key));
-  }, [selectedRespondent]);
+    return Object.entries(payload).filter(([key]) => Boolean(key) && !selectedRespondentFields.includes(key) && !isCoreRespondentField(key));
+  }, [selectedRespondent, selectedRespondentFields]);
+
+  const selectedRespondentFieldColumns = useMemo(
+    () => availableRespondentFields.filter((fieldName) => selectedRespondentFields.includes(fieldName)),
+    [availableRespondentFields, selectedRespondentFields]
+  );
 
   const sortedRespondents = useMemo(() => {
     const list = [...respondents];
@@ -305,6 +316,29 @@ export default function DashboardPage() {
       .trim();
   }
 
+  function isCoreRespondentField(fieldName) {
+    const normalized = normalizeSearchText(fieldName);
+    return normalized === 'name' || normalized === 'email';
+  }
+
+  function getDemoRespondentFields(formId = '') {
+    const fieldNames = new Set();
+
+    getDemoRespondents().forEach((respondent) => {
+      if (formId && respondent?.formConnection?.id !== formId) {
+        return;
+      }
+
+      Object.keys(respondent?.rawData || {}).forEach((fieldName) => {
+        if (fieldName && !isCoreRespondentField(fieldName)) {
+          fieldNames.add(fieldName);
+        }
+      });
+    });
+
+    return Array.from(fieldNames).sort((first, second) => first.localeCompare(second));
+  }
+
   function tokenizeSearchQuery(value) {
     return normalizeSearchText(value)
       .split(/\s+/)
@@ -373,6 +407,36 @@ export default function DashboardPage() {
     setRespondentPage(offset / limit);
     setRespondentHasMore(offset + nextRespondents.length < totalCount);
     return { respondents: nextRespondents, totalCount };
+  }
+
+  async function fetchRespondentFields(formId = selectedFormFilter) {
+    if (demoMode) {
+      const demoFields = getDemoRespondentFields(formId);
+      setAvailableRespondentFields(demoFields);
+      setSelectedRespondentFields((current) => current.filter((fieldName) => demoFields.includes(fieldName)));
+      return demoFields;
+    }
+
+    const params = new URLSearchParams();
+    if (formId) {
+      params.set('formId', formId);
+    }
+
+    const queryString = params.toString();
+    const response = await fetch(`${apiBase}/crm/respondents/fields${queryString ? `?${queryString}` : ''}`, {
+      headers: buildAuthHeaders()
+    });
+    const data = await response.json();
+    handleUnauthorized(response, data);
+    if (!response.ok) throw new Error(data.message || 'Could not fetch respondent fields');
+
+    const nextFields = Array.isArray(data.fields)
+      ? data.fields.filter((fieldName) => fieldName && !isCoreRespondentField(fieldName))
+      : [];
+
+    setAvailableRespondentFields(nextFields);
+    setSelectedRespondentFields((current) => current.filter((fieldName) => nextFields.includes(fieldName)));
+    return nextFields;
   }
 
   function filterRespondents(source, searchValue = '') {
@@ -480,6 +544,20 @@ export default function DashboardPage() {
   }, [activeTab, demoMode, authToken, respondentSearch, allRespondents]);
 
   useEffect(() => {
+    if (activeTab !== 'respondents') {
+      return;
+    }
+
+    if (!demoMode && !authToken) {
+      return;
+    }
+
+    fetchRespondentFields(selectedFormFilter).catch((error) => {
+      setUiError(error.message || 'Could not load respondent fields');
+    });
+  }, [activeTab, demoMode, authToken, selectedFormFilter]);
+
+  useEffect(() => {
     if (activeTab !== 'respondents' || demoMode || !authToken || respondentsLoaded) {
       return;
     }
@@ -545,10 +623,24 @@ export default function DashboardPage() {
       handleUnauthorized(response, data);
       if (!response.ok) throw new Error(data.message || 'Could not create form connection');
 
-      setUiMessage('Form connected successfully. Click Sync Now to import responses.');
       setShowConnectModal(false);
       setFormPayload({ name: '', sheetId: '', sheetName: 'Form Responses 1' });
-      await Promise.all([fetchForms(), fetchStats()]);
+      setForms((current) => {
+        const nextForm = data.form ? [data.form, ...current.filter((form) => form.id !== data.form.id)] : current;
+        return nextForm;
+      });
+
+      setUiMessage('Form connected. Starting initial sync now.');
+      await handleSyncForm(data.form.id);
+
+      setActiveTab('respondents');
+      setSelectedFormFilter(data.form.id);
+      setRespondentFieldDropdownOpen(false);
+
+      const { respondents: nextRespondents } = await fetchRespondents({ reset: true, offset: 0, limit: 100 });
+      await fetchRespondentFields(data.form.id);
+
+      setRespondents(filterRespondents(nextRespondents, respondentSearch));
     } catch (error) {
       setUiError(error.message || 'Could not connect form');
     } finally {
@@ -591,6 +683,7 @@ export default function DashboardPage() {
 
       if (activeTab === 'respondents') {
         await fetchRespondents({ reset: true, offset: 0, limit: 100 });
+        await fetchRespondentFields(selectedFormFilter);
         await runRespondentSearch(respondentSearch);
       }
     } catch (error) {
@@ -657,6 +750,7 @@ export default function DashboardPage() {
 
       if (activeTab === 'respondents') {
         await fetchRespondents({ reset: true, offset: 0, limit: 100 });
+        await fetchRespondentFields(selectedFormFilter);
         await runRespondentSearch(respondentSearch);
       }
     } catch (error) {
@@ -681,6 +775,7 @@ export default function DashboardPage() {
 
       if (activeTab === 'respondents') {
         await fetchRespondents({ reset: true, offset: 0, limit: 100 });
+        await fetchRespondentFields(selectedFormFilter);
         await runRespondentSearch(respondentSearch);
       }
 
@@ -773,6 +868,10 @@ export default function DashboardPage() {
       setForms((current) => current.filter((item) => item.id !== form.id));
       setAllRespondents((current) => current.filter((item) => item.formConnectionId !== form.id));
       setRespondents((current) => current.filter((item) => item.formConnectionId !== form.id));
+      if (selectedFormFilter === form.id) {
+        setSelectedFormFilter('');
+        setSelectedRespondentFields([]);
+      }
       setRespondentSearch('');
       setStats((current) => ({
         ...current,
@@ -805,6 +904,11 @@ export default function DashboardPage() {
       if (selectedRespondent?.formConnection?.id === form.id) {
         setRespondentDrawerOpen(false);
         setSelectedRespondent(null);
+      }
+
+      if (selectedFormFilter === form.id) {
+        setSelectedFormFilter('');
+        setSelectedRespondentFields([]);
       }
 
       setForms((current) => current.filter((item) => item.id !== form.id));
@@ -1465,6 +1569,13 @@ export default function DashboardPage() {
                       <button className="btn-secondary" onClick={() => handleSyncForm(form.id)} disabled={syncingId === form.id}>
                         {syncingId === form.id ? 'Syncing...' : 'Sync Now'}
                       </button>
+                      <button
+                        className="btn-danger"
+                        onClick={() => handleDeleteForm(form)}
+                        disabled={syncingId === form.id}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1476,11 +1587,13 @@ export default function DashboardPage() {
           {activeTab === 'respondents' && (
             <section className="dashboard-section">
               <div className="section-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <select
                     value={selectedFormFilter}
-                    onChange={(e) => setSelectedFormFilter(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedFormFilter(e.target.value);
+                      setRespondentFieldDropdownOpen(false);
+                    }}
                     style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--dash-border)', backgroundColor: 'var(--dash-panel-soft)', color: 'var(--dash-text)', cursor: 'pointer' }}
                   >
                     <option value="">All Forms</option>
@@ -1490,6 +1603,60 @@ export default function DashboardPage() {
                       </option>
                     ))}
                   </select>
+
+                  <div className="filter-dropdown-wrap">
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => setRespondentFieldDropdownOpen((prev) => !prev)}
+                    >
+                      Fields {selectedRespondentFields.length > 0 ? `(${selectedRespondentFields.length})` : '(none)'}
+                    </button>
+                    {respondentFieldDropdownOpen ? (
+                      <div className="field-dropdown-menu">
+                        <div className="field-dropdown-header">
+                          <strong>Show in table</strong>
+                          <span>Unselected fields stay in View</span>
+                        </div>
+                        {availableRespondentFields.length === 0 ? (
+                          <p className="field-dropdown-empty">No additional form fields found.</p>
+                        ) : (
+                          availableRespondentFields.map((fieldName) => (
+                            <label key={fieldName} className="field-dropdown-option">
+                              <input
+                                type="checkbox"
+                                checked={selectedRespondentFields.includes(fieldName)}
+                                onChange={() => {
+                                  setSelectedRespondentFields((current) =>
+                                    current.includes(fieldName)
+                                      ? current.filter((item) => item !== fieldName)
+                                      : [...current, fieldName]
+                                  );
+                                }}
+                              />
+                              <span>{fieldName}</span>
+                            </label>
+                          ))
+                        )}
+                        <div className="field-dropdown-actions">
+                          <button
+                            type="button"
+                            className="filter-dropdown-option"
+                            onClick={() => setSelectedRespondentFields([])}
+                          >
+                            Clear all
+                          </button>
+                          <button
+                            type="button"
+                            className="filter-dropdown-option"
+                            onClick={() => setRespondentFieldDropdownOpen(false)}
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <form className="search-filters" onSubmit={handleRespondentSearch}>
                   <input
@@ -1569,6 +1736,9 @@ export default function DashboardPage() {
                         <th>Name</th>
                         <th>Email</th>
                         <th>Row</th>
+                        {selectedRespondentFieldColumns.map((fieldName) => (
+                          <th key={fieldName}>{fieldName}</th>
+                        ))}
                         <th>Action</th>
                       </tr>
                     </thead>
@@ -1576,17 +1746,20 @@ export default function DashboardPage() {
                       {sortedRespondents
                         .filter((row) => !selectedFormFilter || row.formConnection?.id === selectedFormFilter)
                         .map((row) => (
-                        <tr key={row.id}>
-                          <td>{row.name || '-'}</td>
-                          <td>{row.email || '-'}</td>
-                          <td>{row.sourceRowNumber}</td>
-                          <td>
-                            <button className="btn-secondary table-action" type="button" onClick={() => handleOpenRespondent(row)}>
-                              View
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                          <tr key={row.id}>
+                            <td>{row.name || '-'}</td>
+                            <td>{row.email || '-'}</td>
+                            <td>{row.sourceRowNumber}</td>
+                            {selectedRespondentFieldColumns.map((fieldName) => (
+                              <td key={fieldName}>{renderRespondentFieldValue(row?.rawData?.[fieldName])}</td>
+                            ))}
+                            <td>
+                              <button className="btn-secondary table-action" type="button" onClick={() => handleOpenRespondent(row)}>
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                   {respondentHasMore && !demoMode && (
@@ -1766,9 +1939,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="drawer-data-list">
-                  <h4>Captured Form Fields</h4>
+                  <h4>View Fields</h4>
                   {respondentDetailEntries.length === 0 ? (
-                    <p className="drawer-empty">No additional fields available.</p>
+                    <p className="drawer-empty">No hidden fields left to show.</p>
                   ) : (
                     respondentDetailEntries.map(([key, value]) => (
                       <div key={key} className="drawer-data-item">
